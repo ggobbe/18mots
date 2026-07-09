@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122 122">
+  <title>18 Mots</title>
+  <rect width="122" height="122" fill="#f4f3ec"/>
+  <rect x="14" y="14" width="104" height="104" rx="8" fill="#237a70"/>
+  <rect x="5" y="5" width="104" height="104" rx="8" fill="#e9bd4c" stroke="#17242d" stroke-width="5"/>
+  <text x="57" y="59" fill="#17242d" font-family="ui-rounded, 'Avenir Next', Avenir, system-ui, sans-serif" font-size="54" font-weight="900" text-anchor="middle" dominant-baseline="central">18</text>
+</svg>

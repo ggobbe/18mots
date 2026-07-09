@@ -22,6 +22,8 @@ const correct_feedback_delay = 750
 
 const incorrect_feedback_delay = 400
 
+const github_url = "https://github.com/ggobbe/18mots"
+
 type Screen {
   Loading
   Welcome
@@ -598,14 +600,20 @@ fn view_welcome(model: Model) -> Element(Message) {
         ])
     },
     view_stats(model.results),
-    html.a(
-      [
-        attribute.class("english-version-link"),
-        attribute.href("https://18words.com/"),
-        attribute.hreflang("en"),
-      ],
-      [html.text("Version originale en anglais")],
-    ),
+    html.div([attribute.class("home-links")], [
+      html.a(
+        [
+          attribute.class("home-link"),
+          attribute.href("https://18words.com/"),
+          attribute.hreflang("en"),
+        ],
+        [html.text("Version originale")],
+      ),
+      html.a(
+        [attribute.class("home-link"), attribute.href(github_url)],
+        [html.text("GitHub")],
+      ),
+    ]),
   ])
 }
 
