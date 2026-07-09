@@ -1,0 +1,30 @@
+name = "dixhuit_mots"
+version = "0.1.0"
+target = "javascript"
+gleam = ">= 1.17.0"
+description = "A French daily word survival game built with Gleam and Lustre."
+licences = ["MIT"]
+
+[dependencies]
+gleam_json = ">= 3.0.0 and < 4.0.0"
+gleam_stdlib = ">= 0.60.0 and < 2.0.0"
+lustre = ">= 5.7.0 and < 6.0.0"
+
+[dev-dependencies]
+gleeunit = "~> 1.0"
+lustre_dev_tools = ">= 2.0.0 and < 3.0.0"
+
+[tools.lustre.html]
+title = "18 Mots"
+lang = "fr"
+meta = [{ name = "theme-color", content = "#e9bd4c" }]
+links = [
+  { rel = "icon", type = "image/svg+xml", href = "favicon.svg", sizes = "any" },
+  { rel = "apple-touch-icon", href = "apple-touch-icon.png", sizes = "180x180" },
+  { rel = "manifest", href = "manifest.webmanifest" },
+]
+stylesheets = [{ href = "style.css" }]
+
+[tools.lustre.build]
+outdir = "dist"
+minify = true
