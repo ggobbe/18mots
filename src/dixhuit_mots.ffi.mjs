@@ -67,14 +67,6 @@ export function clear_active_attempt() {
   }
 }
 
-export function blur_active_element() {
-  window.requestAnimationFrame(() => {
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
-  });
-}
-
 export async function share(text, url, callback) {
   try {
     if (navigator.share) {
@@ -94,10 +86,28 @@ export function set_timeout(delay, callback) {
   window.setTimeout(callback, delay);
 }
 
+export function scroll_tiles_into_view() {
+  if (!window.matchMedia("(pointer: coarse)").matches) return;
+
+  const grid = document.querySelector(".tile-grid");
+  const viewport = window.visualViewport;
+  if (!grid || !viewport) return;
+
+  const reveal = () => {
+    grid.scrollIntoView({ block: "center", behavior: "smooth" });
+  };
+
+  viewport.addEventListener("resize", reveal, { once: true });
+  window.setTimeout(reveal, 350);
+}
+
 export function listen_for_keys(callback) {
   if (keyListener) return;
 
-  keyListener = (event) => callback(event.key);
+  keyListener = (event) => {
+    if (event.target instanceof HTMLInputElement) return;
+    callback(event.key);
+  };
   window.addEventListener("keydown", keyListener);
 }
 

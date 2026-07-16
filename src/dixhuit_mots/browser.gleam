@@ -37,11 +37,6 @@ pub fn clear_active_attempt() -> Nil {
   Nil
 }
 
-@external(javascript, "../dixhuit_mots.ffi.mjs", "blur_active_element")
-pub fn blur_active_element() -> Nil {
-  Nil
-}
-
 @external(javascript, "../dixhuit_mots.ffi.mjs", "share")
 pub fn share(
   _text: String,
@@ -53,6 +48,11 @@ pub fn share(
 
 @external(javascript, "../dixhuit_mots.ffi.mjs", "set_timeout")
 pub fn set_timeout(_delay: Int, _callback: fn() -> Nil) -> Nil {
+  Nil
+}
+
+@external(javascript, "../dixhuit_mots.ffi.mjs", "scroll_tiles_into_view")
+pub fn scroll_tiles_into_view() -> Nil {
   Nil
 }
 

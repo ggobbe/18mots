@@ -46,6 +46,10 @@ input:focus-visible {
   outline-offset: 3px;
 }
 
+.answer-input:focus-visible {
+  outline: none;
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -276,6 +280,7 @@ h1 {
   justify-content: center;
   gap: 20px;
   padding: 26px 0;
+  touch-action: manipulation;
 }
 
 .game-meta {
@@ -296,51 +301,40 @@ h1 {
   color: var(--danger);
 }
 
-.answer-assembly {
-  display: flex;
+.answer-input {
   width: 100%;
-  justify-content: center;
-  gap: 7px;
-  border: 0;
-  background: transparent;
-  padding: 8px 0;
-}
-
-.answer-slot {
-  display: grid;
-  width: clamp(34px, 9vw, 48px);
-  height: clamp(42px, 11vw, 56px);
-  place-items: center;
-  border: 2px solid var(--ink);
+  height: clamp(52px, 14vw, 64px);
   border-radius: 8px;
+  appearance: none;
   background: var(--surface);
   color: var(--ink);
-  font-size: clamp(1.15rem, 4vw, 1.5rem);
+  font-size: clamp(1.35rem, 6vw, 2rem);
+  border: 2px solid var(--ink);
   font-weight: 900;
+  letter-spacing: 0.18em;
+  padding: 0 0 0 0.18em;
+  text-align: center;
+  text-transform: uppercase;
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease,
     transform 140ms ease;
+  touch-action: manipulation;
 }
 
-.answer-slot--empty {
-  border-color: #a6afb0;
-  color: transparent;
-}
-
-.answer-assembly--correct .answer-slot {
+.answer-input--correct {
   border-color: var(--teal-dark);
   background: var(--teal);
   color: #fff;
 }
 
-.answer-assembly--correct {
+.answer-input--correct {
   animation: success-exit 680ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-.answer-assembly--incorrect {
+.answer-input--incorrect {
   animation: answer-shake 320ms ease;
 }
 
-.answer-assembly--incorrect .answer-slot {
+.answer-input--incorrect {
   border-color: #8f2f2f;
   background: var(--danger);
   color: #fff;
@@ -373,6 +367,7 @@ h1 {
   color: var(--ink);
   font-size: clamp(1.45rem, 7vw, 2.2rem);
   font-weight: 900;
+  touch-action: manipulation;
   transition: transform 120ms ease, background 120ms ease, color 120ms ease;
 }
 
@@ -562,7 +557,8 @@ h1 {
     gap: 8px;
   }
 
-  .answer-assembly {
-    gap: 5px;
+  .answer-input {
+    letter-spacing: 0.12em;
+    padding-left: 0.12em;
   }
 }

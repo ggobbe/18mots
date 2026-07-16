@@ -116,15 +116,6 @@ pub fn tile_count(round: Round) -> Int {
   list.length(round.tiles)
 }
 
-pub fn columns(round: Round) -> Int {
-  case string.length(round.target) {
-    4 -> 2
-    5 -> 3
-    6 -> 3
-    _ -> 4
-  }
-}
-
 pub fn selected_answer(round: Round, selected_ids: List(Int)) -> String {
   selected_letters(round.tiles, selected_ids)
   |> string.concat
@@ -141,6 +132,10 @@ pub fn first_matching_unused_tile(
   key: String,
 ) -> Option(Int) {
   find_matching_tile(round.tiles, selected_ids, normalized_key(key))
+}
+
+pub fn tile_ids_for_answer(round: Round, answer: String) -> Option(List(Int)) {
+  tile_ids_for_letters(round, string.to_graphemes(answer), [])
 }
 
 fn empty_word_bank() -> WordBank {
@@ -399,6 +394,21 @@ fn find_matching_tile(
       {
         True -> Some(tile.id)
         False -> find_matching_tile(rest, selected_ids, key)
+      }
+  }
+}
+
+fn tile_ids_for_letters(
+  round: Round,
+  letters: List(String),
+  selected_ids: List(Int),
+) -> Option(List(Int)) {
+  case letters {
+    [] -> Some(selected_ids)
+    [letter, ..rest] ->
+      case first_matching_unused_tile(round, selected_ids, letter) {
+        None -> None
+        Some(id) -> tile_ids_for_letters(round, rest, list.append(selected_ids, [id]))
       }
   }
 }

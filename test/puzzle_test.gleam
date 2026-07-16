@@ -1,7 +1,7 @@
 import dixhuit_mots/puzzle
 import gleam/int
 import gleam/list
-import gleam/option.{Some}
+import gleam/option.{None, Some}
 import gleeunit/should
 
 pub fn puzzle_test() {
@@ -64,6 +64,21 @@ pub fn answers_ignore_accents_test() {
 
   should.equal(True, puzzle.is_correct_answer(round, [0, 1, 2, 3, 4, 5]))
   should.equal(True, puzzle.is_correct_answer(round, [0, 1, 2, 4, 3, 5]))
+}
+
+pub fn typed_answers_select_matching_tiles_test() {
+  let round =
+    puzzle.Round(number: 1, target: "allées", tiles: [
+      puzzle.Tile(id: 0, letter: "a"),
+      puzzle.Tile(id: 1, letter: "l"),
+      puzzle.Tile(id: 2, letter: "é"),
+      puzzle.Tile(id: 3, letter: "e"),
+      puzzle.Tile(id: 4, letter: "l"),
+      puzzle.Tile(id: 5, letter: "s"),
+    ])
+
+  should.equal(Some([0, 1, 4, 2, 3, 5]), puzzle.tile_ids_for_answer(round, "allées"))
+  should.equal(None, puzzle.tile_ids_for_answer(round, "alléex"))
 }
 
 fn round_lengths(rounds: List(puzzle.Round)) -> List(Int) {

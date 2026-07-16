@@ -70,6 +70,8 @@ type Message {
   UserOpenedWelcome
   UserSelectedArchiveDate(String)
   UserSelectedTile(Int)
+  UserTypedAnswer(String)
+  UserFocusedAnswerInput
   UserClearedSelection
   UserPressedKey(String)
   TimerTicked(Int)
@@ -157,6 +159,8 @@ fn update(model: Model, message: Message) -> #(Model, Effect(Message)) {
     )
     UserSelectedArchiveDate(date) -> start_game(model, date)
     UserSelectedTile(id) -> select_tile(model, id)
+    UserTypedAnswer(answer) -> type_answer(model, answer)
+    UserFocusedAnswerInput -> #(model, scroll_tiles_into_view())
     UserClearedSelection -> clear_selection(model)
     UserPressedKey(key) -> handle_key(model, key)
     TimerTicked(token) -> handle_tick(model, token)
@@ -312,6 +316,23 @@ fn clear_selection(model: Model) -> #(Model, Effect(Message)) {
   }
 }
 
+fn type_answer(model: Model, answer: String) -> #(Model, Effect(Message)) {
+  case model.screen, model.answer_feedback, current_round(model) {
+    Playing, NoAnswerFeedback, Some(round) ->
+      case puzzle.tile_ids_for_answer(round, answer) {
+        None -> #(model, effect.none())
+        Some(selected_ids) -> {
+          let selected = Model(..model, selected_ids:, feedback: "")
+          case list.length(selected_ids) == puzzle.tile_count(round) {
+            True -> submit_answer(selected, round)
+            False -> #(selected, effect.none())
+          }
+        }
+      }
+    _, _, _ -> #(model, effect.none())
+  }
+}
+
 fn handle_key(model: Model, key: String) -> #(Model, Effect(Message)) {
   case model.screen, model.answer_feedback {
     Playing, NoAnswerFeedback ->
@@ -429,7 +450,6 @@ fn handle_tick(model: Model, token: Int) -> #(Model, Effect(Message)) {
             effect.batch([
               schedule_tick(token),
               save_active_attempt(next),
-              blur_active_element(),
             ]),
           )
         }
@@ -648,39 +668,42 @@ fn view_game(model: Model) -> Element(Message) {
             [html.text(int.to_string(model.seconds_left) <> " s")],
           ),
         ]),
-        view_answer_slots(round, model.selected_ids, model.answer_feedback),
+        view_answer_input(round, model.selected_ids, model.answer_feedback),
         html.p([attribute.class("feedback"), attribute.aria_live("polite")], [
           html.text(model.feedback),
         ]),
         view_tile_grid(round, model.selected_ids, model.answer_feedback),
         html.p([attribute.class("game-hint")], [
-          html.text("Cliquez le mot assemblé pour effacer votre sélection."),
+          html.text("Tapez votre réponse ou choisissez les lettres."),
         ]),
       ])
   }
 }
 
-fn view_answer_slots(
+fn view_answer_input(
   round: puzzle.Round,
   selected_ids: List(Int),
   feedback: AnswerFeedback,
 ) -> Element(Message) {
-  let letters =
-    displayed_answer(round, selected_ids, feedback)
-    |> string.to_graphemes
-
-  html.button(
+  html.input(
     [
-      attribute.class("answer-assembly"),
+      attribute.class("answer-input"),
       attribute.classes([
-        #("answer-assembly--correct", is_correct_feedback(feedback)),
-        #("answer-assembly--incorrect", is_incorrect_feedback(feedback)),
+        #("answer-input--correct", is_correct_feedback(feedback)),
+        #("answer-input--incorrect", is_incorrect_feedback(feedback)),
       ]),
-      attribute.type_("button"),
-      attribute.aria_label("Effacer les lettres sélectionnées"),
-      event.on_click(UserClearedSelection),
+      attribute.type_("text"),
+      attribute.value(displayed_answer(round, selected_ids, feedback)),
+      attribute.maxlength(puzzle.tile_count(round)),
+      attribute.inputmode("text"),
+      attribute.autocapitalize("characters"),
+      attribute.autocorrect(False),
+      attribute.autocomplete("off"),
+      attribute.spellcheck(False),
+      attribute.aria_label("Votre réponse"),
+      event.on_input(UserTypedAnswer),
+      event.on_focus(UserFocusedAnswerInput),
     ],
-    answer_slots(puzzle.tile_count(round), letters),
   )
 }
 
@@ -709,30 +732,6 @@ fn is_incorrect_feedback(feedback: AnswerFeedback) -> Bool {
   }
 }
 
-fn answer_slots(
-  remaining: Int,
-  letters: List(String),
-) -> List(Element(Message)) {
-  case remaining {
-    0 -> []
-    _ ->
-      case letters {
-        [] -> [
-          html.span([attribute.class("answer-slot answer-slot--empty")], [
-            html.text(" "),
-          ]),
-          ..answer_slots(remaining - 1, [])
-        ]
-        [letter, ..rest] -> [
-          html.span([attribute.class("answer-slot")], [
-            html.text(string.uppercase(letter)),
-          ]),
-          ..answer_slots(remaining - 1, rest)
-        ]
-      }
-  }
-}
-
 fn view_tile_grid(
   round: puzzle.Round,
   selected_ids: List(Int),
@@ -745,7 +744,7 @@ fn view_tile_grid(
         #("tile-grid--correct", is_correct_feedback(feedback)),
         #("tile-grid--incorrect", is_incorrect_feedback(feedback)),
       ]),
-      attribute.style("--columns", int.to_string(puzzle.columns(round))),
+      attribute.style("--columns", int.to_string(puzzle.tile_count(round))),
       attribute.role("group"),
       attribute.aria_label("Lettres disponibles"),
     ],
@@ -1018,11 +1017,6 @@ fn clear_active_attempt() -> Effect(message) {
   browser.clear_active_attempt()
 }
 
-fn blur_active_element() -> Effect(message) {
-  use _ <- effect.from
-  browser.blur_active_element()
-}
-
 fn resume_active_attempt() -> Effect(Message) {
   use dispatch <- effect.from
   dispatch(TryResumeActiveAttempt)
@@ -1031,6 +1025,11 @@ fn resume_active_attempt() -> Effect(Message) {
 fn schedule_tick(token: Int) -> Effect(Message) {
   use dispatch <- effect.from
   browser.set_timeout(1000, fn() { dispatch(TimerTicked(token)) })
+}
+
+fn scroll_tiles_into_view() -> Effect(message) {
+  use _ <- effect.from
+  browser.scroll_tiles_into_view()
 }
 
 fn schedule_answer_feedback_end(token: Int, delay: Int) -> Effect(Message) {
