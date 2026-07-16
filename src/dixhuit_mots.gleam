@@ -697,9 +697,7 @@ fn view_welcome(model: Model) -> Element(Message) {
             html.text(
               "Vous avez survécu à "
               <> int.to_string(result.score)
-              <> " mots sur 18 pour "
-              <> int.to_string(result.points)
-              <> " points.",
+              <> " mots sur 18.",
             ),
           ]),
           view_home_failed_target(result),
@@ -958,7 +956,7 @@ fn view_results(model: Model) -> Element(Message) {
         html.p([attribute.class("eyebrow")], [html.text(result.date)]),
         html.div([attribute.class("result-score")], [
           html.strong([], [html.text(int.to_string(result.score))]),
-          html.span([], [html.text(" mots · " <> int.to_string(result.points) <> " pts")]),
+          html.span([], [html.text("/18")]),
         ]),
         html.h1([], [html.text(result_heading(result))]),
         html.p([attribute.class("result-copy")], [
@@ -1082,9 +1080,7 @@ fn archive_row_label(result: Option(StoredResult)) -> String {
   case result {
     Some(result) ->
       int.to_string(result.score)
-      <> "/18 · "
-      <> int.to_string(result.points)
-      <> " pts"
+      <> "/18"
       <> case result.easy_mode {
         True -> " · facile"
         False -> ""
@@ -1119,20 +1115,11 @@ fn view_load_error(model: Model) -> Element(Message) {
 fn view_stats(results: List(StoredResult)) -> Element(Message) {
   let total = list.length(results)
   let solved = list.fold(results, 0, fn(total, result) { total + result.score })
-  let points = list.fold(results, 0, fn(total, result) { total + result.points })
 
   html.div([attribute.class("stats-line")], [
     html.span([], [html.text(int.to_string(total) <> " défi(s) joué(s)")]),
     html.span([], [html.text(int.to_string(solved) <> " mots trouvés")]),
-    html.span([], [html.text(points_label(points))]),
   ])
-}
-
-fn points_label(points: Int) -> String {
-  case points == 1 {
-    True -> "1 point"
-    False -> int.to_string(points) <> " points"
-  }
 }
 
 fn result_heading(result: StoredResult) -> String {
@@ -1158,9 +1145,6 @@ fn share_result(result: StoredResult) -> Effect(Message) {
     "J’ai trouvé "
     <> int.to_string(result.score)
     <> " mots sur 18"
-    <> " pour "
-    <> int.to_string(result.points)
-    <> " points"
     <> case result.easy_mode {
       True -> " en mode facile"
       False -> ""
