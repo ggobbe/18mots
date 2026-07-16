@@ -52,6 +52,7 @@ type Model {
     rounds: List(puzzle.Round),
     round_index: Int,
     selected_ids: List(Int),
+    points: Int,
     easy_mode: Bool,
     easy_mode_preference: Bool,
     remaining_lives: Int,
@@ -111,6 +112,7 @@ fn initial_model(today: String) -> Model {
     rounds: [],
     round_index: 0,
     selected_ids: [],
+    points: 0,
     easy_mode: False,
     easy_mode_preference: False,
     remaining_lives: normal_lives,
@@ -259,6 +261,7 @@ fn start_game(model: Model, date: String) -> #(Model, Effect(Message)) {
                       rounds:,
                       round_index: attempt.round_index,
                       selected_ids: [],
+                      points: attempt.points,
                       easy_mode: attempt.easy_mode,
                       remaining_lives: attempt.remaining_lives,
                       shuffle_count: attempt.shuffle_count,
@@ -294,6 +297,7 @@ fn resume_attempt(model: Model, date: String) -> ActiveAttempt {
         date:,
         round_index: 0,
         seconds_left: initial_seconds,
+        points: 0,
         remaining_lives: lives_for_round(model.easy_mode_preference),
         shuffle_count: 0,
         easy_mode: model.easy_mode_preference,
@@ -423,7 +427,14 @@ fn submit_answer(
 ) -> #(Model, Effect(Message)) {
   case puzzle.is_correct_answer(round, model.selected_ids) {
     False -> show_answer_feedback(model, IncorrectAnswer)
-    True -> show_answer_feedback(model, CorrectAnswer)
+    True ->
+      show_answer_feedback(
+        Model(
+          ..model,
+          points: model.points + puzzle.points_for_answer(model.easy_mode, model.seconds_left),
+        ),
+        CorrectAnswer,
+      )
   }
 }
 
@@ -456,6 +467,7 @@ fn finish_answer_feedback(
           finish_game(
             Model(..model, answer_feedback: NoAnswerFeedback),
             18,
+            model.points,
             None,
           )
         False -> {
@@ -496,7 +508,7 @@ fn handle_tick(model: Model, token: Int) -> #(Model, Effect(Message)) {
     False -> #(model, effect.none())
     True ->
       case model.seconds_left <= 1 {
-        True -> finish_game(model, model.round_index, failed_target(model))
+        True -> finish_game(model, model.round_index, model.points, failed_target(model))
         False -> {
           let seconds_left = model.seconds_left - 1
           let feedback = case model.easy_mode && seconds_left <= 16 {
@@ -533,9 +545,10 @@ fn next_round_lives(model: Model) -> Int {
 fn finish_game(
   model: Model,
   score: Int,
+  points: Int,
   failed_target: Option(String),
 ) -> #(Model, Effect(Message)) {
-  let result = StoredResult(date: model.date, score:, failed_target:, easy_mode: model.easy_mode)
+  let result = StoredResult(date: model.date, score:, points:, failed_target:, easy_mode: model.easy_mode)
   let results = upsert_result(model.results, result)
   let next =
     Model(
@@ -683,7 +696,9 @@ fn view_welcome(model: Model) -> Element(Message) {
             html.text(
               "Vous avez survécu à "
               <> int.to_string(result.score)
-              <> " mots sur 18.",
+              <> " mots sur 18 pour "
+              <> int.to_string(result.points)
+              <> " points.",
             ),
           ]),
           view_home_failed_target(result),
@@ -942,7 +957,7 @@ fn view_results(model: Model) -> Element(Message) {
         html.p([attribute.class("eyebrow")], [html.text(result.date)]),
         html.div([attribute.class("result-score")], [
           html.strong([], [html.text(int.to_string(result.score))]),
-          html.span([], [html.text("/18")]),
+          html.span([], [html.text(" mots · " <> int.to_string(result.points) <> " pts")]),
         ]),
         html.h1([], [html.text(result_heading(result))]),
         html.p([attribute.class("result-copy")], [
@@ -1066,7 +1081,9 @@ fn archive_row_label(result: Option(StoredResult)) -> String {
   case result {
     Some(result) ->
       int.to_string(result.score)
-      <> "/18"
+      <> "/18 · "
+      <> int.to_string(result.points)
+      <> " pts"
       <> case result.easy_mode {
         True -> " · facile"
         False -> ""
@@ -1101,11 +1118,20 @@ fn view_load_error(model: Model) -> Element(Message) {
 fn view_stats(results: List(StoredResult)) -> Element(Message) {
   let total = list.length(results)
   let solved = list.fold(results, 0, fn(total, result) { total + result.score })
+  let points = list.fold(results, 0, fn(total, result) { total + result.points })
 
   html.div([attribute.class("stats-line")], [
     html.span([], [html.text(int.to_string(total) <> " défi(s) joué(s)")]),
     html.span([], [html.text(int.to_string(solved) <> " mots trouvés")]),
+    html.span([], [html.text(points_label(points))]),
   ])
+}
+
+fn points_label(points: Int) -> String {
+  case points == 1 {
+    True -> "1 point"
+    False -> int.to_string(points) <> " points"
+  }
 }
 
 fn result_heading(result: StoredResult) -> String {
@@ -1131,6 +1157,9 @@ fn share_result(result: StoredResult) -> Effect(Message) {
     "J’ai trouvé "
     <> int.to_string(result.score)
     <> " mots sur 18"
+    <> " pour "
+    <> int.to_string(result.points)
+    <> " points"
     <> case result.easy_mode {
       True -> " en mode facile"
       False -> ""
@@ -1193,6 +1222,7 @@ fn save_active_attempt(model: Model) -> Effect(message) {
           date: model.date,
           round_index: model.round_index,
           seconds_left: model.seconds_left,
+          points: model.points,
           remaining_lives: model.remaining_lives,
           shuffle_count: model.shuffle_count,
           easy_mode: model.easy_mode,

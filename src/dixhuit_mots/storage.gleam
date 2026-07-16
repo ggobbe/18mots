@@ -6,6 +6,7 @@ pub type StoredResult {
   StoredResult(
     date: String,
     score: Int,
+    points: Int,
     failed_target: Option(String),
     easy_mode: Bool,
   )
@@ -16,6 +17,7 @@ pub type ActiveAttempt {
     date: String,
     round_index: Int,
     seconds_left: Int,
+    points: Int,
     remaining_lives: Int,
     shuffle_count: Int,
     easy_mode: Bool,
@@ -45,6 +47,7 @@ fn active_attempt_decoder() -> decode.Decoder(ActiveAttempt) {
   use date <- decode.field("date", decode.string)
   use round_index <- decode.field("round_index", decode.int)
   use seconds_left <- decode.field("seconds_left", decode.int)
+  use points <- decode.optional_field("points", 0, decode.int)
   use remaining_lives <- decode.optional_field("remaining_lives", 6, decode.int)
   use shuffle_count <- decode.optional_field("shuffle_count", 0, decode.int)
   use easy_mode <- decode.optional_field("easy_mode", False, decode.bool)
@@ -52,6 +55,7 @@ fn active_attempt_decoder() -> decode.Decoder(ActiveAttempt) {
     date:,
     round_index:,
     seconds_left:,
+    points:,
     remaining_lives:,
     shuffle_count:,
     easy_mode:,
@@ -71,6 +75,7 @@ pub fn encode_active_attempt(attempt: ActiveAttempt) -> String {
     #("date", json.string(attempt.date)),
     #("round_index", json.int(attempt.round_index)),
     #("seconds_left", json.int(attempt.seconds_left)),
+    #("points", json.int(attempt.points)),
     #("remaining_lives", json.int(attempt.remaining_lives)),
     #("shuffle_count", json.int(attempt.shuffle_count)),
     #("easy_mode", json.bool(attempt.easy_mode)),
@@ -81,19 +86,21 @@ pub fn encode_active_attempt(attempt: ActiveAttempt) -> String {
 fn stored_result_decoder() -> decode.Decoder(StoredResult) {
   use date <- decode.field("date", decode.string)
   use score <- decode.field("score", decode.int)
+  use points <- decode.optional_field("points", score, decode.int)
   use failed_target <- decode.optional_field(
     "failed_target",
     None,
     decode.optional(decode.string),
   )
   use easy_mode <- decode.optional_field("easy_mode", False, decode.bool)
-  decode.success(StoredResult(date:, score:, failed_target:, easy_mode:))
+  decode.success(StoredResult(date:, score:, points:, failed_target:, easy_mode:))
 }
 
 fn encode_result(result: StoredResult) -> json.Json {
   json.object([
     #("date", json.string(result.date)),
     #("score", json.int(result.score)),
+    #("points", json.int(result.points)),
     #("failed_target", encode_optional_string(result.failed_target)),
     #("easy_mode", json.bool(result.easy_mode)),
   ])

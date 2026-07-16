@@ -104,6 +104,14 @@ pub fn shuffled_rounds_are_deterministic_test() {
   should.equal(False, shuffled.tiles == round.tiles)
 }
 
+pub fn points_reward_speed_and_reduce_easy_mode_hints_test() {
+  should.equal(30, puzzle.points_for_answer(False, 30))
+  should.equal(12, puzzle.points_for_answer(True, 19))
+  should.equal(9, puzzle.points_for_answer(True, 18))
+  should.equal(3, puzzle.points_for_answer(True, 9))
+  should.equal(1, puzzle.points_for_answer(True, 1))
+}
+
 fn round_lengths(rounds: List(puzzle.Round)) -> List(Int) {
   case rounds {
     [] -> []

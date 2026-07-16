@@ -143,6 +143,19 @@ pub fn tile_count(round: Round) -> Int {
   list.length(round.tiles)
 }
 
+pub fn points_for_answer(easy_mode: Bool, seconds_left: Int) -> Int {
+  let raw_points = case easy_mode {
+    False -> seconds_left
+    True ->
+      case seconds_left {
+        seconds if seconds <= 9 -> seconds / 3
+        seconds if seconds <= 18 -> seconds / 2
+        seconds -> seconds * 2 / 3
+      }
+  }
+  int.max(1, raw_points)
+}
+
 pub fn shuffled_round(round: Round, date: String, shuffle_count: Int) -> Round {
   case shuffle_count {
     0 -> round
