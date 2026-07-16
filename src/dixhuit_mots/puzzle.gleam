@@ -143,6 +143,26 @@ pub fn tile_count(round: Round) -> Int {
   list.length(round.tiles)
 }
 
+pub fn shuffled_round(round: Round, date: String, shuffle_count: Int) -> Round {
+  case shuffle_count {
+    0 -> round
+    _ -> {
+      let seed =
+        seed_from_key(
+          "18-mots|"
+            <> word_bank_version
+            <> "|shuffle|"
+            <> date
+            <> "|"
+            <> int.to_string(round.number)
+            <> "|"
+            <> int.to_string(shuffle_count),
+        )
+      Round(..round, tiles: shuffle_tiles_until_changed(round.tiles, Random(seed), 0))
+    }
+  }
+}
+
 pub fn selected_answer(round: Round, selected_ids: List(Int)) -> String {
   selected_letters(round.tiles, selected_ids)
   |> string.concat
@@ -405,6 +425,31 @@ fn shuffle(letters: List(String), random: Random) -> #(List(String), Random) {
   }
 }
 
+fn shuffle_tiles_until_changed(
+  tiles: List(Tile),
+  random: Random,
+  attempts: Int,
+) -> List(Tile) {
+  let #(candidate, after_shuffle) = shuffle_tiles(tiles, random)
+  case candidate == tiles && attempts < 3 {
+    True -> shuffle_tiles_until_changed(tiles, after_shuffle, attempts + 1)
+    False -> candidate
+  }
+}
+
+fn shuffle_tiles(tiles: List(Tile), random: Random) -> #(List(Tile), Random) {
+  case tiles {
+    [] -> #([], random)
+    _ -> {
+      let #(value, next_random) = next(random)
+      let index = value % list.length(tiles)
+      let #(tile, remaining) = take_tile_at(tiles, index)
+      let #(tail, after_tail) = shuffle_tiles(remaining, next_random)
+      #([tile, ..tail], after_tail)
+    }
+  }
+}
+
 fn take_at(letters: List(String), index: Int) -> #(String, List(String)) {
   case letters {
     [] -> #("", [])
@@ -414,6 +459,20 @@ fn take_at(letters: List(String), index: Int) -> #(String, List(String)) {
         False -> {
           let #(chosen, remaining) = take_at(rest, index - 1)
           #(chosen, [letter, ..remaining])
+        }
+      }
+  }
+}
+
+fn take_tile_at(tiles: List(Tile), index: Int) -> #(Tile, List(Tile)) {
+  case tiles {
+    [] -> #(Tile(id: 0, letter: ""), [])
+    [tile, ..rest] ->
+      case index == 0 {
+        True -> #(tile, rest)
+        False -> {
+          let #(chosen, remaining) = take_tile_at(rest, index - 1)
+          #(chosen, [tile, ..remaining])
         }
       }
   }

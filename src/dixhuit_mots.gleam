@@ -18,6 +18,8 @@ import lustre/event
 
 const initial_seconds = 30
 
+const initial_lives = 6
+
 const correct_feedback_delay = 750
 
 const incorrect_feedback_delay = 400
@@ -48,6 +50,8 @@ type Model {
     rounds: List(puzzle.Round),
     round_index: Int,
     selected_ids: List(Int),
+    remaining_lives: Int,
+    shuffle_count: Int,
     seconds_left: Int,
     timer_token: Int,
     results: List(StoredResult),
@@ -72,6 +76,8 @@ type Message {
   UserSelectedTile(Int)
   UserTypedAnswer(String)
   UserFocusedAnswerInput
+  UserPressedRandomizeButton
+  UserRandomizedTiles
   UserClearedSelection
   UserPressedKey(String)
   TimerTicked(Int)
@@ -99,6 +105,8 @@ fn initial_model(today: String) -> Model {
     rounds: [],
     round_index: 0,
     selected_ids: [],
+    remaining_lives: initial_lives,
+    shuffle_count: 0,
     seconds_left: initial_seconds,
     timer_token: 0,
     results: [],
@@ -161,6 +169,8 @@ fn update(model: Model, message: Message) -> #(Model, Effect(Message)) {
     UserSelectedTile(id) -> select_tile(model, id)
     UserTypedAnswer(answer) -> type_answer(model, answer)
     UserFocusedAnswerInput -> #(model, scroll_tiles_into_view())
+    UserPressedRandomizeButton -> #(model, effect.none())
+    UserRandomizedTiles -> randomize_tiles(model)
     UserClearedSelection -> clear_selection(model)
     UserPressedKey(key) -> handle_key(model, key)
     TimerTicked(token) -> handle_tick(model, token)
@@ -235,6 +245,8 @@ fn start_game(model: Model, date: String) -> #(Model, Effect(Message)) {
                       rounds:,
                       round_index: attempt.round_index,
                       selected_ids: [],
+                      remaining_lives: attempt.remaining_lives,
+                      shuffle_count: attempt.shuffle_count,
                       seconds_left: attempt.seconds_left,
                       timer_token: token,
                       last_result: None,
@@ -262,7 +274,14 @@ fn resume_attempt(model: Model, date: String) -> ActiveAttempt {
         ..attempt,
         seconds_left: int.max(0, attempt.seconds_left - 1),
       )
-    _ -> ActiveAttempt(date:, round_index: 0, seconds_left: initial_seconds)
+    _ ->
+      ActiveAttempt(
+        date:,
+        round_index: 0,
+        seconds_left: initial_seconds,
+        remaining_lives: initial_lives,
+        shuffle_count: 0,
+      )
   }
 }
 
@@ -313,6 +332,23 @@ fn clear_selection(model: Model) -> #(Model, Effect(Message)) {
       effect.none(),
     )
     _, _ -> #(model, effect.none())
+  }
+}
+
+fn randomize_tiles(model: Model) -> #(Model, Effect(Message)) {
+  case model.screen, model.answer_feedback, model.remaining_lives {
+    Playing, NoAnswerFeedback, lives if lives > 0 -> {
+      let next =
+        Model(
+          ..model,
+          selected_ids: [],
+          remaining_lives: lives - 1,
+          shuffle_count: model.shuffle_count + 1,
+          feedback: "",
+        )
+      #(next, save_active_attempt(next))
+    }
+    _, _, _ -> #(model, effect.none())
   }
 }
 
@@ -413,6 +449,7 @@ fn finish_answer_feedback(
               ..model,
               round_index: model.round_index + 1,
               selected_ids: [],
+              shuffle_count: 0,
               seconds_left: initial_seconds,
               timer_token: next_token,
               answer_feedback: NoAnswerFeedback,
@@ -487,7 +524,10 @@ fn failed_target(model: Model) -> Option(String) {
 }
 
 fn current_round(model: Model) -> Option(puzzle.Round) {
-  puzzle.round_at(model.rounds, model.round_index)
+  case puzzle.round_at(model.rounds, model.round_index) {
+    None -> None
+    Some(round) -> Some(puzzle.shuffled_round(round, model.date, model.shuffle_count))
+  }
 }
 
 fn find_result(
@@ -673,6 +713,7 @@ fn view_game(model: Model) -> Element(Message) {
           html.text(model.feedback),
         ]),
         view_tile_grid(round, model.selected_ids, model.answer_feedback),
+        view_randomize_control(model),
         html.p([attribute.class("game-hint")], [
           html.text("Tapez votre réponse ou choisissez les lettres."),
         ]),
@@ -705,6 +746,26 @@ fn view_answer_input(
       event.on_focus(UserFocusedAnswerInput),
     ],
   )
+}
+
+fn view_randomize_control(model: Model) -> Element(Message) {
+  html.div([attribute.class("randomize-control")], [
+    html.button(
+      [
+        attribute.class("secondary-action"),
+        attribute.type_("button"),
+        attribute.disabled(
+          model.remaining_lives == 0 || model.answer_feedback != NoAnswerFeedback,
+        ),
+        event.prevent_default(event.on_mouse_down(UserPressedRandomizeButton)),
+        event.on_click(UserRandomizedTiles),
+      ],
+      [html.text("Mélanger")],
+    ),
+    html.span([attribute.class("randomize-lives")], [
+      html.text(int.to_string(model.remaining_lives) <> " restants"),
+    ]),
+  ])
 }
 
 fn displayed_answer(
@@ -1006,6 +1067,8 @@ fn save_active_attempt(model: Model) -> Effect(message) {
           date: model.date,
           round_index: model.round_index,
           seconds_left: model.seconds_left,
+          remaining_lives: model.remaining_lives,
+          shuffle_count: model.shuffle_count,
         )),
       )
     False -> Nil

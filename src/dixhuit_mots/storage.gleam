@@ -7,7 +7,13 @@ pub type StoredResult {
 }
 
 pub type ActiveAttempt {
-  ActiveAttempt(date: String, round_index: Int, seconds_left: Int)
+  ActiveAttempt(
+    date: String,
+    round_index: Int,
+    seconds_left: Int,
+    remaining_lives: Int,
+    shuffle_count: Int,
+  )
 }
 
 pub fn decode_results(serialized: String) -> Result(List(StoredResult), Nil) {
@@ -33,7 +39,15 @@ fn active_attempt_decoder() -> decode.Decoder(ActiveAttempt) {
   use date <- decode.field("date", decode.string)
   use round_index <- decode.field("round_index", decode.int)
   use seconds_left <- decode.field("seconds_left", decode.int)
-  decode.success(ActiveAttempt(date:, round_index:, seconds_left:))
+  use remaining_lives <- decode.optional_field("remaining_lives", 6, decode.int)
+  use shuffle_count <- decode.optional_field("shuffle_count", 0, decode.int)
+  decode.success(ActiveAttempt(
+    date:,
+    round_index:,
+    seconds_left:,
+    remaining_lives:,
+    shuffle_count:,
+  ))
 }
 
 pub fn encode_results(results: List(StoredResult)) -> String {
@@ -49,6 +63,8 @@ pub fn encode_active_attempt(attempt: ActiveAttempt) -> String {
     #("date", json.string(attempt.date)),
     #("round_index", json.int(attempt.round_index)),
     #("seconds_left", json.int(attempt.seconds_left)),
+    #("remaining_lives", json.int(attempt.remaining_lives)),
+    #("shuffle_count", json.int(attempt.shuffle_count)),
   ])
   |> json.to_string
 }

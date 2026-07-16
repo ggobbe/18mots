@@ -381,6 +381,19 @@ h1 {
   transform: translateY(-2px);
 }
 
+.randomize-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.randomize-lives {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
 .tile-grid--correct .letter-tile--selected {
   border-color: var(--teal-dark);
   background: var(--teal);

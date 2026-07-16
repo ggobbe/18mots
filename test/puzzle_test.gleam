@@ -89,6 +89,21 @@ pub fn typed_answers_select_matching_tiles_test() {
   should.equal(None, puzzle.tile_ids_for_answer(round, "alléex"))
 }
 
+pub fn shuffled_rounds_are_deterministic_test() {
+  let round =
+    puzzle.Round(number: 1, target: "table", tiles: [
+      puzzle.Tile(id: 0, letter: "t"),
+      puzzle.Tile(id: 1, letter: "a"),
+      puzzle.Tile(id: 2, letter: "b"),
+      puzzle.Tile(id: 3, letter: "l"),
+      puzzle.Tile(id: 4, letter: "e"),
+    ])
+
+  let shuffled = puzzle.shuffled_round(round, "2026-07-16", 1)
+  should.equal(shuffled, puzzle.shuffled_round(round, "2026-07-16", 1))
+  should.equal(False, shuffled.tiles == round.tiles)
+}
+
 fn round_lengths(rounds: List(puzzle.Round)) -> List(Int) {
   case rounds {
     [] -> []

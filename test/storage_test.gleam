@@ -13,3 +13,18 @@ pub fn old_results_remain_decodable_test() {
     ]),
   )
 }
+
+pub fn old_active_attempts_receive_shuffle_defaults_test() {
+  storage.decode_active_attempt(
+    "{\"date\":\"2026-07-09\",\"round_index\":2,\"seconds_left\":19}",
+  )
+  |> should.equal(
+    Ok(storage.ActiveAttempt(
+      date: "2026-07-09",
+      round_index: 2,
+      seconds_left: 19,
+      remaining_lives: 6,
+      shuffle_count: 0,
+    )),
+  )
+}
