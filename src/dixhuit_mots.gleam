@@ -393,6 +393,7 @@ fn handle_key(model: Model, key: String) -> #(Model, Effect(Message)) {
   case model.screen, model.answer_feedback {
     Playing, NoAnswerFeedback ->
       case key {
+        "Space" -> randomize_tiles(model)
         "Backspace" -> #(
           Model(
             ..model,
@@ -769,9 +770,6 @@ fn view_game(model: Model) -> Element(Message) {
           model.shuffle_count,
         ),
         view_randomize_control(model),
-        html.p([attribute.class("game-hint")], [
-          html.text("Tapez votre réponse ou choisissez les lettres."),
-        ]),
       ])
   }
 }
@@ -859,18 +857,21 @@ fn view_easy_mode_control(easy_mode: Bool) -> Element(Message) {
 
 fn view_randomize_control(model: Model) -> Element(Message) {
   html.div([attribute.class("randomize-control")], [
-    html.button(
-      [
-        attribute.class("secondary-action"),
-        attribute.type_("button"),
-        attribute.disabled(
-          model.remaining_lives == 0 || model.answer_feedback != NoAnswerFeedback,
-        ),
-        event.prevent_default(event.on_mouse_down(UserPressedRandomizeButton)),
-        event.on_click(UserRandomizedTiles),
-      ],
-      [html.text("Mélanger")],
-    ),
+    html.div([attribute.class("randomize-button")], [
+      html.button(
+        [
+          attribute.class("secondary-action"),
+          attribute.type_("button"),
+          attribute.disabled(
+            model.remaining_lives == 0 || model.answer_feedback != NoAnswerFeedback,
+          ),
+          event.prevent_default(event.on_mouse_down(UserPressedRandomizeButton)),
+          event.on_click(UserRandomizedTiles),
+        ],
+        [html.text("Mélanger")],
+      ),
+      html.p([attribute.class("randomize-shortcut")], [html.text("Touche Espace")]),
+    ]),
     html.span([attribute.class("randomize-lives")], [
       html.text(
         int.to_string(model.remaining_lives)

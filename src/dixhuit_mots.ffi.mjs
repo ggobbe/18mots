@@ -121,6 +121,11 @@ export function listen_for_keys(callback) {
   if (keyListener) return;
 
   keyListener = (event) => {
+    if (event.key === " ") {
+      event.preventDefault();
+      callback("Space");
+      return;
+    }
     if (event.target instanceof HTMLInputElement) return;
     callback(event.key);
   };

@@ -399,6 +399,23 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 10px;
+  margin-bottom: 1.4rem;
+}
+
+.randomize-shortcut {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 4px 0 0;
+  position: absolute;
+  top: 100%;
+  text-align: center;
+  width: 100%;
+}
+
+.randomize-button {
+  position: relative;
+  text-align: center;
 }
 
 .randomize-lives {
