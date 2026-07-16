@@ -1,4 +1,5 @@
 import gleam/list
+import gleam/int
 import gleam/option.{type Option, None, Some}
 import gleam/order.{Gt, Lt}
 import gleam/string
@@ -18,6 +19,8 @@ const seven_letter_rounds = 2
 const eight_letter_rounds = 1
 
 const nine_letter_rounds = 1
+
+const repeat_window_days = 7
 
 const random_modulus = 2_147_483_647
 
@@ -76,17 +79,41 @@ pub fn generate(
       let random =
         Random(seed_from_key("18-mots|" <> word_bank_version <> "|" <> date))
       let #(four, after_four) =
-        rounds_from_bucket(bank.four, 1, four_letter_rounds, random)
+        rounds_from_words(
+          scheduled_words(bank.four, four_letter_rounds, 4, date),
+          1,
+          random,
+        )
       let #(five, after_five) =
-        rounds_from_bucket(bank.five, 3, five_letter_rounds, after_four)
+        rounds_from_words(
+          scheduled_words(bank.five, five_letter_rounds, 5, date),
+          3,
+          after_four,
+        )
       let #(six, after_six) =
-        rounds_from_bucket(bank.six, 9, six_letter_rounds, after_five)
+        rounds_from_words(
+          scheduled_words(bank.six, six_letter_rounds, 6, date),
+          9,
+          after_five,
+        )
       let #(seven, after_seven) =
-        rounds_from_bucket(bank.seven, 15, seven_letter_rounds, after_six)
+        rounds_from_words(
+          scheduled_words(bank.seven, seven_letter_rounds, 7, date),
+          15,
+          after_six,
+        )
       let #(eight, after_eight) =
-        rounds_from_bucket(bank.eight, 17, eight_letter_rounds, after_seven)
+        rounds_from_words(
+          scheduled_words(bank.eight, eight_letter_rounds, 8, date),
+          17,
+          after_seven,
+        )
       let #(nine, after_nine) =
-        rounds_from_bucket(bank.nine, 18, nine_letter_rounds, after_eight)
+        rounds_from_words(
+          scheduled_words(bank.nine, nine_letter_rounds, 9, date),
+          18,
+          after_eight,
+        )
 
       Ok(sort_then_soften_rounds(
         four,
@@ -172,13 +199,94 @@ fn has_minimum_words(bank: WordBank) -> Bool {
   && list.length(bank.nine) >= nine_letter_rounds
 }
 
-fn rounds_from_bucket(
+fn scheduled_words(
   words: List(String),
-  first_number: Int,
   count: Int,
+  length: Int,
+  date: String,
+) -> List(String) {
+  let cycle_days = list.length(words) / count
+  let day = days_since_release(date)
+  let cycle = day / cycle_days
+  let day_in_cycle = day % cycle_days
+  cycle_deck(words, count, length, cycle)
+  |> list.drop(day_in_cycle * count)
+  |> list.take(count)
+}
+
+fn cycle_deck(
+  words: List(String),
+  count: Int,
+  length: Int,
+  cycle: Int,
+) -> List(String) {
+  let cycle_days = list.length(words) / count
+  let boundary_size = { repeat_window_days - 1 } * count
+  let deck = shuffled_deck(words, length, cycle)
+  let tail =
+    deck
+    |> list.drop(cycle_days * count - boundary_size)
+    |> list.take(boundary_size)
+  let blocked = case cycle {
+    0 -> []
+    _ -> cycle_tail(words, count, length, cycle - 1)
+  }
+  let opening =
+    deck
+    |> list.filter(fn(word) {
+      !list.contains(tail, word) && !list.contains(blocked, word)
+    })
+    |> list.take(boundary_size)
+  let middle =
+    deck
+    |> list.filter(fn(word) {
+      !list.contains(opening, word) && !list.contains(tail, word)
+    })
+    |> list.take(cycle_days * count - boundary_size - boundary_size)
+
+  list.append(opening, list.append(middle, tail))
+}
+
+fn cycle_tail(
+  words: List(String),
+  count: Int,
+  length: Int,
+  cycle: Int,
+) -> List(String) {
+  let cycle_days = list.length(words) / count
+  let boundary_size = { repeat_window_days - 1 } * count
+  shuffled_deck(words, length, cycle)
+  |> list.drop(cycle_days * count - boundary_size)
+  |> list.take(boundary_size)
+}
+
+fn shuffled_deck(words: List(String), length: Int, cycle: Int) -> List(String) {
+  let seed =
+    seed_from_key(
+      "18-mots|"
+        <> word_bank_version
+        <> "|deck|"
+        <> int.to_string(length)
+        <> "|"
+        <> int.to_string(cycle),
+    )
+  let #(deck, _) = shuffle(words, Random(seed))
+  deck
+}
+
+fn rounds_from_words(
+  words: List(String),
+  number: Int,
   random: Random,
 ) -> #(List(Round), Random) {
-  pick_rounds(words, first_number, count, [], random, [])
+  case words {
+    [] -> #([], random)
+    [word, ..rest] -> {
+      let #(round, after_round) = make_round(number, word, random)
+      let #(rounds, after_rest) = rounds_from_words(rest, number + 1, after_round)
+      #([round, ..rounds], after_rest)
+    }
+  }
 }
 
 fn sort_then_soften_rounds(
@@ -258,47 +366,6 @@ fn renumber_rounds(rounds: List(Round), number: Int) -> List(Round) {
       Round(..round, number:),
       ..renumber_rounds(rest, number + 1)
     ]
-  }
-}
-
-fn pick_rounds(
-  words: List(String),
-  number: Int,
-  remaining: Int,
-  picked_indexes: List(Int),
-  random: Random,
-  rounds: List(Round),
-) -> #(List(Round), Random) {
-  case remaining == 0 {
-    True -> #(list.reverse(rounds), random)
-    False -> {
-      let #(value, next_random) = next(random)
-      let index = value % list.length(words)
-
-      case list.contains(picked_indexes, index) {
-        True ->
-          pick_rounds(
-            words,
-            number,
-            remaining,
-            picked_indexes,
-            next_random,
-            rounds,
-          )
-        False -> {
-          let assert Some(word) = word_at(words, index)
-          let #(round, after_round) = make_round(number, word, next_random)
-          pick_rounds(
-            words,
-            number + 1,
-            remaining - 1,
-            [index, ..picked_indexes],
-            after_round,
-            [round, ..rounds],
-          )
-        }
-      }
-    }
   }
 }
 
@@ -432,17 +499,6 @@ fn normalized_grapheme(key: String) -> String {
   }
 }
 
-fn word_at(words: List(String), index: Int) -> Option(String) {
-  case words {
-    [] -> None
-    [word, ..rest] ->
-      case index == 0 {
-        True -> Some(word)
-        False -> word_at(rest, index - 1)
-      }
-  }
-}
-
 fn next(random: Random) -> #(Int, Random) {
   let Random(seed) = random
   let candidate = seed * random_multiplier % random_modulus
@@ -472,6 +528,46 @@ fn hash_codepoints(codepoints: List(Int), acc: Int) -> Int {
       let combined = product + value
       hash_codepoints(rest, combined % random_modulus)
     }
+  }
+}
+
+fn days_since_release(date: String) -> Int {
+  date_day_number(date) - date_day_number(release_date)
+}
+
+fn date_day_number(date: String) -> Int {
+  let assert Ok(year) = date |> string.slice(0, 4) |> int.parse
+  let assert Ok(month) = date |> string.slice(5, 2) |> int.parse
+  let assert Ok(day) = date |> string.slice(8, 2) |> int.parse
+  days_before_year(year) + days_before_month(year, month) + day
+}
+
+fn days_before_year(year: Int) -> Int {
+  let previous_year = year - 1
+  previous_year * 365 + previous_year / 4 - previous_year / 100 + previous_year / 400
+}
+
+fn days_before_month(year: Int, month: Int) -> Int {
+  case month {
+    1 -> 0
+    2 -> 31
+    3 -> 59 + leap_day(year)
+    4 -> 90 + leap_day(year)
+    5 -> 120 + leap_day(year)
+    6 -> 151 + leap_day(year)
+    7 -> 181 + leap_day(year)
+    8 -> 212 + leap_day(year)
+    9 -> 243 + leap_day(year)
+    10 -> 273 + leap_day(year)
+    11 -> 304 + leap_day(year)
+    _ -> 334 + leap_day(year)
+  }
+}
+
+fn leap_day(year: Int) -> Int {
+  case year % 400 == 0 || year % 4 == 0 && year % 100 != 0 {
+    True -> 1
+    False -> 0
   }
 }
 
