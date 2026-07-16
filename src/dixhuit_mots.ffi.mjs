@@ -2,6 +2,7 @@ import { Error as GleamError, Ok } from "./gleam.mjs";
 
 const resultsKey = "18mots:results:v1";
 const activeAttemptKey = "18mots:active-attempt:v1";
+const easyModeKey = "18mots:easy-mode:v1";
 const emptyResults = JSON.stringify({ schema_version: 1, results: [] });
 let keyListener = undefined;
 let countdownInterval = undefined;
@@ -42,6 +43,21 @@ export function load_active_attempt(callback) {
     callback(new Ok(serialized));
   } catch (error) {
     callback(new GleamError(String(error?.message ?? error)));
+  }
+}
+
+export function load_easy_mode(callback) {
+  try {
+    callback(window.localStorage.getItem(easyModeKey) === "true");
+  } catch {
+    callback(false);
+  }
+}
+
+export function save_easy_mode(easyMode) {
+  try {
+    window.localStorage.setItem(easyModeKey, String(easyMode));
+  } catch {
   }
 }
 

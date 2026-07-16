@@ -22,6 +22,16 @@ pub fn load_active_attempt(
   Nil
 }
 
+@external(javascript, "../dixhuit_mots.ffi.mjs", "load_easy_mode")
+pub fn load_easy_mode(_callback: fn(Bool) -> Nil) -> Nil {
+  Nil
+}
+
+@external(javascript, "../dixhuit_mots.ffi.mjs", "save_easy_mode")
+pub fn save_easy_mode(_easy_mode: Bool) -> Nil {
+  Nil
+}
+
 @external(javascript, "../dixhuit_mots.ffi.mjs", "save_results")
 pub fn save_results(_serialized: String) -> Nil {
   Nil

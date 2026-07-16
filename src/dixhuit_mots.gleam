@@ -18,7 +18,9 @@ import lustre/event
 
 const initial_seconds = 30
 
-const initial_lives = 6
+const normal_lives = 6
+
+const easy_lives_per_word = 3
 
 const correct_feedback_delay = 750
 
@@ -50,6 +52,8 @@ type Model {
     rounds: List(puzzle.Round),
     round_index: Int,
     selected_ids: List(Int),
+    easy_mode: Bool,
+    easy_mode_preference: Bool,
     remaining_lives: Int,
     shuffle_count: Int,
     seconds_left: Int,
@@ -68,8 +72,10 @@ type Message {
   WordBankLoaded(Result(puzzle.WordBank, String))
   StorageLoaded(Result(List(StoredResult), Nil))
   ActiveAttemptLoaded(Result(ActiveAttempt, Nil))
+  EasyModeLoaded(Bool)
   TryResumeActiveAttempt
   UserStartedToday
+  UserChangedEasyMode(Bool)
   UserOpenedArchive
   UserOpenedWelcome
   UserSelectedArchiveDate(String)
@@ -83,7 +89,7 @@ type Message {
   TimerTicked(Int)
   NextCountdownTicked(String)
   AnswerFeedbackEnded(Int)
-  UserSharedResult(Int)
+  UserSharedResult(StoredResult)
   ShareFinished(Result(String, String))
   RetryLoading
 }
@@ -105,7 +111,9 @@ fn initial_model(today: String) -> Model {
     rounds: [],
     round_index: 0,
     selected_ids: [],
-    remaining_lives: initial_lives,
+    easy_mode: False,
+    easy_mode_preference: False,
+    remaining_lives: normal_lives,
     shuffle_count: 0,
     seconds_left: initial_seconds,
     timer_token: 0,
@@ -126,6 +134,7 @@ fn init(model: Model) -> #(Model, Effect(Message)) {
       load_word_bank(),
       load_results(),
       load_active_attempt(),
+      load_easy_mode(),
       listen_for_keys(),
       listen_for_next_countdown(),
     ]),
@@ -155,8 +164,13 @@ fn update(model: Model, message: Message) -> #(Model, Effect(Message)) {
       resume_active_attempt(),
     )
     ActiveAttemptLoaded(Error(_)) -> #(model, effect.none())
+    EasyModeLoaded(easy_mode) -> #(Model(..model, easy_mode_preference: easy_mode), effect.none())
     TryResumeActiveAttempt -> try_resume_active_attempt(model)
     UserStartedToday -> start_game(model, model.today)
+    UserChangedEasyMode(easy_mode) -> #(
+      Model(..model, easy_mode_preference: easy_mode),
+      save_easy_mode(easy_mode),
+    )
     UserOpenedArchive -> #(
       Model(..model, screen: Archive, feedback: ""),
       effect.none(),
@@ -179,9 +193,9 @@ fn update(model: Model, message: Message) -> #(Model, Effect(Message)) {
       effect.none(),
     )
     AnswerFeedbackEnded(token) -> finish_answer_feedback(model, token)
-    UserSharedResult(score) -> #(
+    UserSharedResult(result) -> #(
       Model(..model, feedback: ""),
-      share_result(score),
+      share_result(result),
     )
     ShareFinished(Ok(feedback)) -> #(Model(..model, feedback:), effect.none())
     ShareFinished(Error(_)) -> #(
@@ -245,6 +259,7 @@ fn start_game(model: Model, date: String) -> #(Model, Effect(Message)) {
                       rounds:,
                       round_index: attempt.round_index,
                       selected_ids: [],
+                      easy_mode: attempt.easy_mode,
                       remaining_lives: attempt.remaining_lives,
                       shuffle_count: attempt.shuffle_count,
                       seconds_left: attempt.seconds_left,
@@ -279,8 +294,9 @@ fn resume_attempt(model: Model, date: String) -> ActiveAttempt {
         date:,
         round_index: 0,
         seconds_left: initial_seconds,
-        remaining_lives: initial_lives,
+        remaining_lives: lives_for_round(model.easy_mode_preference),
         shuffle_count: 0,
+        easy_mode: model.easy_mode_preference,
       )
   }
 }
@@ -450,6 +466,7 @@ fn finish_answer_feedback(
               round_index: model.round_index + 1,
               selected_ids: [],
               shuffle_count: 0,
+              remaining_lives: next_round_lives(model),
               seconds_left: initial_seconds,
               timer_token: next_token,
               answer_feedback: NoAnswerFeedback,
@@ -462,12 +479,12 @@ fn finish_answer_feedback(
         }
       }
     Playing, IncorrectAnswer(active_token) if token == active_token -> #(
-      Model(
-        ..model,
-        selected_ids: [],
-        answer_feedback: NoAnswerFeedback,
-        feedback: "Ce n'est pas le mot attendu.",
-      ),
+        Model(
+          ..model,
+          selected_ids: [],
+          answer_feedback: NoAnswerFeedback,
+          feedback: "",
+        ),
       schedule_tick(model.timer_token),
     )
     _, _ -> #(model, effect.none())
@@ -481,7 +498,12 @@ fn handle_tick(model: Model, token: Int) -> #(Model, Effect(Message)) {
       case model.seconds_left <= 1 {
         True -> finish_game(model, model.round_index, failed_target(model))
         False -> {
-          let next = Model(..model, seconds_left: model.seconds_left - 1)
+          let seconds_left = model.seconds_left - 1
+          let feedback = case model.easy_mode && seconds_left <= 16 {
+            True -> ""
+            False -> model.feedback
+          }
+          let next = Model(..model, seconds_left:, feedback:)
           #(
             next,
             effect.batch([
@@ -494,12 +516,26 @@ fn handle_tick(model: Model, token: Int) -> #(Model, Effect(Message)) {
   }
 }
 
+fn lives_for_round(easy_mode: Bool) -> Int {
+  case easy_mode {
+    True -> easy_lives_per_word
+    False -> normal_lives
+  }
+}
+
+fn next_round_lives(model: Model) -> Int {
+  case model.easy_mode {
+    True -> easy_lives_per_word
+    False -> model.remaining_lives
+  }
+}
+
 fn finish_game(
   model: Model,
   score: Int,
   failed_target: Option(String),
 ) -> #(Model, Effect(Message)) {
-  let result = StoredResult(date: model.date, score:, failed_target:)
+  let result = StoredResult(date: model.date, score:, failed_target:, easy_mode: model.easy_mode)
   let results = upsert_result(model.results, result)
   let next =
     Model(
@@ -636,6 +672,7 @@ fn view_welcome(model: Model) -> Element(Message) {
             ],
             [html.text("Jouer aujourd'hui")],
           ),
+          view_easy_mode_control(model.easy_mode_preference),
         ])
       Some(result) ->
         html.div([attribute.class("played-today")], [
@@ -709,10 +746,13 @@ fn view_game(model: Model) -> Element(Message) {
           ),
         ]),
         view_answer_input(round, model.selected_ids, model.answer_feedback),
-        html.p([attribute.class("feedback"), attribute.aria_live("polite")], [
-          html.text(model.feedback),
-        ]),
-        view_tile_grid(round, model.selected_ids, model.answer_feedback),
+        view_easy_hints(model, round),
+        view_tile_grid(
+          round,
+          model.selected_ids,
+          model.answer_feedback,
+          model.shuffle_count,
+        ),
         view_randomize_control(model),
         html.p([attribute.class("game-hint")], [
           html.text("Tapez votre réponse ou choisissez les lettres."),
@@ -748,6 +788,60 @@ fn view_answer_input(
   )
 }
 
+fn view_easy_hints(model: Model, round: puzzle.Round) -> Element(Message) {
+  html.p([attribute.class("feedback easy-hint"), attribute.aria_live("polite")], [
+    html.text(case model.feedback {
+      "" -> case model.easy_mode {
+        True -> easy_hint(round.target, model.seconds_left)
+        False -> ""
+      }
+      feedback -> feedback
+    }),
+  ])
+}
+
+fn easy_hint(target: String, seconds_left: Int) -> String {
+  let letters = string.to_graphemes(target)
+  case seconds_left <= 9 {
+    True -> "Indice : " <> first_letter(letters) <> "…" <> last_letter(letters)
+    False ->
+      case seconds_left <= 18 {
+        True -> "Indice : " <> first_letter(letters) <> "…"
+        False -> ""
+      }
+  }
+}
+
+fn first_letter(letters: List(String)) -> String {
+  case letters {
+    [letter, ..] -> string.uppercase(letter)
+    [] -> ""
+  }
+}
+
+fn last_letter(letters: List(String)) -> String {
+  case list.reverse(letters) {
+    [letter, ..] -> string.uppercase(letter)
+    [] -> ""
+  }
+}
+
+fn view_easy_mode_control(easy_mode: Bool) -> Element(Message) {
+  html.div([attribute.class("easy-mode")], [
+    html.label([attribute.class("easy-mode-control")], [
+      html.input([
+        attribute.type_("checkbox"),
+        attribute.checked(easy_mode),
+        event.on_check(UserChangedEasyMode),
+      ]),
+      html.text(" Mode facile"),
+    ]),
+    html.p([attribute.class("easy-mode-copy")], [
+      html.text("Trois mélanges par mot et des indices à 18 puis 9 secondes."),
+    ]),
+  ])
+}
+
 fn view_randomize_control(model: Model) -> Element(Message) {
   html.div([attribute.class("randomize-control")], [
     html.button(
@@ -763,7 +857,13 @@ fn view_randomize_control(model: Model) -> Element(Message) {
       [html.text("Mélanger")],
     ),
     html.span([attribute.class("randomize-lives")], [
-      html.text(int.to_string(model.remaining_lives) <> " restants"),
+      html.text(
+        int.to_string(model.remaining_lives)
+        <> case model.easy_mode {
+          True -> " restants pour ce mot"
+          False -> " restants aujourd'hui"
+        },
+      ),
     ]),
   ])
 }
@@ -797,6 +897,7 @@ fn view_tile_grid(
   round: puzzle.Round,
   selected_ids: List(Int),
   feedback: AnswerFeedback,
+  shuffle_count: Int,
 ) -> Element(Message) {
   html.div(
     [
@@ -804,6 +905,8 @@ fn view_tile_grid(
       attribute.classes([
         #("tile-grid--correct", is_correct_feedback(feedback)),
         #("tile-grid--incorrect", is_incorrect_feedback(feedback)),
+        #("tile-grid--shuffled-a", shuffle_count % 2 == 1),
+        #("tile-grid--shuffled-b", shuffle_count > 0 && shuffle_count % 2 == 0),
       ]),
       attribute.style("--columns", int.to_string(puzzle.tile_count(round))),
       attribute.role("group"),
@@ -814,6 +917,7 @@ fn view_tile_grid(
       html.button(
         [
           attribute.class("letter-tile"),
+          attribute.style("--tile-index", int.to_string(tile.id)),
           attribute.classes([#("letter-tile--selected", selected)]),
           attribute.type_("button"),
           attribute.tabindex(-1),
@@ -844,6 +948,7 @@ fn view_results(model: Model) -> Element(Message) {
         html.p([attribute.class("result-copy")], [
           html.text(result_copy(result)),
         ]),
+        view_easy_mode_label(result.easy_mode),
         view_failed_target(result),
         view_completed_actions(result),
         html.p([attribute.class("feedback"), attribute.aria_live("polite")], [
@@ -860,7 +965,7 @@ fn view_completed_actions(result: StoredResult) -> Element(Message) {
       [
         attribute.class("primary-action"),
         attribute.type_("button"),
-        event.on_click(UserSharedResult(result.score)),
+        event.on_click(UserSharedResult(result)),
       ],
       [html.text("Partager")],
     ),
@@ -895,6 +1000,7 @@ fn view_archive(model: Model) -> Element(Message) {
     html.p([attribute.class("archive-copy")], [
       html.text("Les 30 derniers défis disponibles, avec vos scores locaux."),
     ]),
+    view_easy_mode_control(model.easy_mode_preference),
     html.div([attribute.class("archive-list")], archive_rows(model)),
     html.p([attribute.class("feedback"), attribute.aria_live("polite")], [
       html.text(model.feedback),
@@ -958,8 +1064,21 @@ fn archive_row(date: String, result: Option(StoredResult)) -> Element(Message) {
 
 fn archive_row_label(result: Option(StoredResult)) -> String {
   case result {
-    Some(result) -> int.to_string(result.score) <> "/18"
+    Some(result) ->
+      int.to_string(result.score)
+      <> "/18"
+      <> case result.easy_mode {
+        True -> " · facile"
+        False -> ""
+      }
     None -> "À jouer"
+  }
+}
+
+fn view_easy_mode_label(easy_mode: Bool) -> Element(Message) {
+  case easy_mode {
+    True -> html.p([attribute.class("easy-mode-label")], [html.text("Mode facile")])
+    False -> html.text("")
   }
 }
 
@@ -1006,10 +1125,17 @@ fn result_copy(result: StoredResult) -> String {
   }
 }
 
-fn share_result(score: Int) -> Effect(Message) {
+fn share_result(result: StoredResult) -> Effect(Message) {
   use dispatch <- effect.from
   let text =
-    "J’ai trouvé " <> int.to_string(score) <> " mots sur 18. Joue à 18 Mots !"
+    "J’ai trouvé "
+    <> int.to_string(result.score)
+    <> " mots sur 18"
+    <> case result.easy_mode {
+      True -> " en mode facile"
+      False -> ""
+    }
+    <> ". Joue à 18 Mots !"
 
   browser.share(text, "https://18mots.com/", fn(result) {
     dispatch(ShareFinished(result))
@@ -1069,6 +1195,7 @@ fn save_active_attempt(model: Model) -> Effect(message) {
           seconds_left: model.seconds_left,
           remaining_lives: model.remaining_lives,
           shuffle_count: model.shuffle_count,
+          easy_mode: model.easy_mode,
         )),
       )
     False -> Nil
@@ -1083,6 +1210,16 @@ fn clear_active_attempt() -> Effect(message) {
 fn resume_active_attempt() -> Effect(Message) {
   use dispatch <- effect.from
   dispatch(TryResumeActiveAttempt)
+}
+
+fn load_easy_mode() -> Effect(Message) {
+  use dispatch <- effect.from
+  browser.load_easy_mode(fn(easy_mode) { dispatch(EasyModeLoaded(easy_mode)) })
+}
+
+fn save_easy_mode(easy_mode: Bool) -> Effect(message) {
+  use _ <- effect.from
+  browser.save_easy_mode(easy_mode)
 }
 
 fn schedule_tick(token: Int) -> Effect(Message) {

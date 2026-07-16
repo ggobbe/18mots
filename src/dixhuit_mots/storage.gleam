@@ -3,7 +3,12 @@ import gleam/json
 import gleam/option.{type Option, None, Some}
 
 pub type StoredResult {
-  StoredResult(date: String, score: Int, failed_target: Option(String))
+  StoredResult(
+    date: String,
+    score: Int,
+    failed_target: Option(String),
+    easy_mode: Bool,
+  )
 }
 
 pub type ActiveAttempt {
@@ -13,6 +18,7 @@ pub type ActiveAttempt {
     seconds_left: Int,
     remaining_lives: Int,
     shuffle_count: Int,
+    easy_mode: Bool,
   )
 }
 
@@ -41,12 +47,14 @@ fn active_attempt_decoder() -> decode.Decoder(ActiveAttempt) {
   use seconds_left <- decode.field("seconds_left", decode.int)
   use remaining_lives <- decode.optional_field("remaining_lives", 6, decode.int)
   use shuffle_count <- decode.optional_field("shuffle_count", 0, decode.int)
+  use easy_mode <- decode.optional_field("easy_mode", False, decode.bool)
   decode.success(ActiveAttempt(
     date:,
     round_index:,
     seconds_left:,
     remaining_lives:,
     shuffle_count:,
+    easy_mode:,
   ))
 }
 
@@ -65,6 +73,7 @@ pub fn encode_active_attempt(attempt: ActiveAttempt) -> String {
     #("seconds_left", json.int(attempt.seconds_left)),
     #("remaining_lives", json.int(attempt.remaining_lives)),
     #("shuffle_count", json.int(attempt.shuffle_count)),
+    #("easy_mode", json.bool(attempt.easy_mode)),
   ])
   |> json.to_string
 }
@@ -77,7 +86,8 @@ fn stored_result_decoder() -> decode.Decoder(StoredResult) {
     None,
     decode.optional(decode.string),
   )
-  decode.success(StoredResult(date:, score:, failed_target:))
+  use easy_mode <- decode.optional_field("easy_mode", False, decode.bool)
+  decode.success(StoredResult(date:, score:, failed_target:, easy_mode:))
 }
 
 fn encode_result(result: StoredResult) -> json.Json {
@@ -85,6 +95,7 @@ fn encode_result(result: StoredResult) -> json.Json {
     #("date", json.string(result.date)),
     #("score", json.int(result.score)),
     #("failed_target", encode_optional_string(result.failed_target)),
+    #("easy_mode", json.bool(result.easy_mode)),
   ])
 }
 
